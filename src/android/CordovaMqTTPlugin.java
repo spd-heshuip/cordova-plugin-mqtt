@@ -1,5 +1,7 @@
 package com.arcoirislabs.plugin.mqtt;
 
+import android.app.Application;
+import android.text.TextUtils;
 import android.util.Log;
 
 import org.apache.cordova.CallbackContext;
@@ -17,6 +19,29 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.SocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * This class echoes a string called from JavaScript.
@@ -39,7 +64,11 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
                 @Override
                 public void run() {
                     try {
-                        connect(args.getString(0), args.getString(1), args.getInt(2), args.getBoolean(3), args.getInt(4), args.getString(5), args.getString(6), args.getString(7), args.getString(8), args.getInt(9), args.getBoolean(10), args.getString(11));
+                        connect(args.getString(0), args.getString(1), args.getInt(2),
+                                args.getBoolean(3), args.getInt(4), args.getString(5),
+                                args.getString(6), args.getString(7), args.getString(8),
+                                args.getInt(9), args.getBoolean(10),
+                                args.getString(11),args.getString(12));
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
@@ -109,10 +138,16 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
         return false;
     }
 
-    private void connect(String url,String cid,int ka,boolean cleanSess,int connTimeOut,String uname, String pass,String willTopic,String willPayload,int willQos,boolean willRetain,String version) {
+    private void connect(String url,String cid,int ka,boolean cleanSess,int connTimeOut,String uname, String pass,String willTopic,String willPayload,int willQos,boolean willRetain,
+                         String version,String cerInfo) {
         MemoryPersistence persistence = new MemoryPersistence();
         final MqttConnectOptions connOpts = new MqttConnectOptions();
         connected = false;
+        if (!TextUtils.isEmpty(cerInfo)){
+            SSLSocketFactory socketFactory = getSslSocket(cerInfo);
+            if (socketFactory != null)
+                connOpts.setSocketFactory(socketFactory);
+        }
         try {
             //Log.i("mqttalabs", "client id is " + cid);
             if (cid==null){
@@ -413,6 +448,78 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
             asyncCB.sendPluginResult(result);
 
             Log.i("mqttalabs","\nfor subscribe the callback id is "+asyncCB.getCallbackId());
+        }
+    }
+
+    public SocketFactory getSslSocket(String cer){
+        InputStream certificate = null;
+        certificate = new ByteArrayInputStream(cer);
+        X509TrustManager trustManager;
+        SSLSocketFactory sslSocketFactory;
+        try {
+            trustManager = trustManagerForCertificates(certificate);
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            //使用构建出的trustManger初始化SSLContext对象
+            sslContext.init(null, new TrustManager[]{trustManager}, null);
+            //获得sslSocketFactory对象
+            sslSocketFactory = sslContext.getSocketFactory();
+        } catch (GeneralSecurityException e) {
+            throw new RuntimeException(e);
+        }
+
+        return sslSocketFactory;
+    }
+
+
+
+    /**
+     * 获去信任自签证书的trustManager
+     *
+     * @param in 自签证书输入流
+     * @return 信任自签证书的trustManager
+     * @throws GeneralSecurityException
+     */
+    private X509TrustManager trustManagerForCertificates(InputStream in)
+            throws GeneralSecurityException {
+        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+        //通过证书工厂得到自签证书对象集合
+        Collection<? extends Certificate> certificates = certificateFactory.generateCertificates(in);
+        if (certificates.isEmpty()) {
+            throw new IllegalArgumentException("expected non-empty set of trusted certificates");
+        }
+        //为证书设置一个keyStore
+        char[] password = "password".toCharArray(); // Any password will work.
+        KeyStore keyStore = newEmptyKeyStore(password);
+        int index = 0;
+        //将证书放入keystore中
+        for (Certificate certificate : certificates) {
+            String certificateAlias = Integer.toString(index++);
+            keyStore.setCertificateEntry(certificateAlias, certificate);
+        }
+        // Use it to build an X509 trust manager.
+        //使用包含自签证书信息的keyStore去构建一个X509TrustManager
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
+                KeyManagerFactory.getDefaultAlgorithm());
+        keyManagerFactory.init(keyStore, password);
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm());
+        trustManagerFactory.init(keyStore);
+        TrustManager[] trustManagers = trustManagerFactory.getTrustManagers();
+        if (trustManagers.length != 1 || !(trustManagers[0] instanceof X509TrustManager)) {
+            throw new IllegalStateException("Unexpected default trust managers:"
+                    + Arrays.toString(trustManagers));
+        }
+        return (X509TrustManager) trustManagers[0];
+    }
+
+    private KeyStore newEmptyKeyStore(char[] password) throws GeneralSecurityException {
+        try {
+            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            InputStream in = null; // By convention, 'null' creates an empty key store.
+            keyStore.load(null, password);
+            return keyStore;
+        } catch (IOException e) {
+            throw new AssertionError(e);
         }
     }
 
