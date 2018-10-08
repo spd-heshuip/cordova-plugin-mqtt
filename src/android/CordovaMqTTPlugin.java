@@ -451,9 +451,9 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
         }
     }
 
-    public SocketFactory getSslSocket(String cer){
+    public SocketFactory getSocketFactory(String cer){
         InputStream certificate = null;
-        certificate = new ByteArrayInputStream(cer);
+        certificate = new ByteArrayInputStream(cer.getBytes());
         X509TrustManager trustManager;
         SSLSocketFactory sslSocketFactory;
         try {
@@ -463,11 +463,10 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
             sslContext.init(null, new TrustManager[]{trustManager}, null);
             //获得sslSocketFactory对象
             sslSocketFactory = sslContext.getSocketFactory();
+            return sslSocketFactory;
         } catch (GeneralSecurityException e) {
             throw new RuntimeException(e);
         }
-
-        return sslSocketFactory;
     }
 
 
