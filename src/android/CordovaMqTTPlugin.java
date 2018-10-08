@@ -42,6 +42,8 @@ import javax.net.SocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
+import javax.net.ssl.SSLSocketFactory;
+
 
 /**
  * This class echoes a string called from JavaScript.
@@ -144,7 +146,7 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
         final MqttConnectOptions connOpts = new MqttConnectOptions();
         connected = false;
         if (!TextUtils.isEmpty(cerInfo)){
-            SSLSocketFactory socketFactory = getSslSocket(cerInfo);
+            SocketFactory socketFactory = getSslSocket(cerInfo);
             if (socketFactory != null)
                 connOpts.setSocketFactory(socketFactory);
         }
@@ -455,7 +457,7 @@ public class CordovaMqTTPlugin extends CordovaPlugin {
         InputStream certificate = null;
         certificate = new ByteArrayInputStream(cer.getBytes());
         X509TrustManager trustManager;
-        SSLSocketFactory sslSocketFactory;
+        SocketFactory sslSocketFactory;
         try {
             trustManager = trustManagerForCertificates(certificate);
             SSLContext sslContext = SSLContext.getInstance("TLS");
