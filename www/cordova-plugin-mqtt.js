@@ -13,7 +13,7 @@ channel = require('cordova/channel'),
     exports.connect = function(args){
         //SSL support is coming soon
         //var urgx = //(^(tcp|ssl|local)&?:\/\/[^\@_?!]+[^\s]+[^\.]+\:\d{2,})/g;
-        var urgx = /(^(tcp|local)&?:\/\/[^\@_?!]+[^\s]+[^\.]+\:\d{2,})/g;
+        var urgx = /(^(tcp|ssl|local)&?:\/\/[^\@_?!]+[^\s]+[^\.]+\:\d{2,})/g;
         if (args.port!==undefined) {
             url = args.url+":"+args.port;
         } else{
